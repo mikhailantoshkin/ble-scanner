@@ -1,8 +1,8 @@
 [package]
-edition      = "2024"
-name         = "ble-scanner"
+edition = "2024"
+name = "ble-scanner"
 rust-version = "1.95"
-version      = "0.1.0"
+version = "0.1.0"
 
 [[bin]]
 name = "ble-scanner"
@@ -19,7 +19,7 @@ esp-rtos = { version = "0.4.0", features = [
   "esp32",
 ] }
 
-defmt                  = "1.0.1"
+defmt = "1.0.1"
 esp-bootloader-esp-idf = { version = "0.6.0", features = ["defmt", "esp32"] }
 
 bt-hci = "0.9.0"
@@ -39,7 +39,10 @@ esp-radio = { version = "1.0.0-beta.1", features = [
 trouble-host = { version = "0.7.0", features = ["gatt"] }
 
 critical-section = "1.2.0"
-static_cell      = "2.1.1"
+static_cell = "2.1.1"
+
+[patch.crates-io]
+esp-rom-sys = { git = "https://github.com/esp-rs/esp-hal.git", rev = "6fedea34e2244a40ea653c226258473aa3ff5e14" }
 
 
 # For fine tuning these settings, please refer to https://doc.rust-lang.org/cargo/reference/profiles.html
@@ -49,7 +52,7 @@ static_cell      = "2.1.1"
 opt-level = "s"
 
 [profile.release]
-codegen-units = 1     # LLVM can perform better optimizations using a single thread
-debug         = 2     # prefer slower builds but better debugging experience
-lto           = 'fat'
-opt-level     = 's'
+codegen-units = 1 # LLVM can perform better optimizations using a single thread
+debug = 2         # prefer slower builds but better debugging experience
+lto = 'fat'
+opt-level = 's'
