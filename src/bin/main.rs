@@ -1,70 +1,91 @@
+//! A bluetooth scanner built using Embassy and trouBLE.
+
+//% CHIP_FILTER: bt_driver_supported
+
 #![no_std]
 #![no_main]
-#![deny(
-    clippy::mem_forget,
-    reason = "mem::forget is generally not safe to do with esp_hal types, especially those \
-    holding buffers for the duration of a data transfer."
-)]
-#![deny(clippy::large_stack_frames)]
 
-use bt_hci::controller::ExternalController;
-use defmt::{error, info};
+use bt_hci::{cmd::le::LeSetScanParams, controller::ControllerCmdSync};
+use defmt::info;
 use embassy_executor::Spawner;
+use embassy_futures::join::join;
 use embassy_time::{Duration, Timer};
-use esp_hal::clock::CpuClock;
-use esp_hal::timer::timg::TimerGroup;
+use esp_alloc as _;
+use esp_backtrace as _;
+use esp_hal::{clock::CpuClock, timer::timg::TimerGroup};
 use esp_println as _;
 use esp_radio::ble::controller::BleConnector;
 use trouble_host::prelude::*;
 
+esp_bootloader_esp_idf::esp_app_desc!();
+
 #[panic_handler]
-fn panic(panic_info: &core::panic::PanicInfo) -> ! {
-    error!("{}", panic_info);
+fn panic(_: &core::panic::PanicInfo) -> ! {
     loop {}
 }
 
-extern crate alloc;
+#[esp_hal::main]
+async fn main(_s: Spawner) {
+    let peripherals = esp_hal::init(esp_hal::Config::default().with_cpu_clock(CpuClock::max()));
 
-const CONNECTIONS_MAX: usize = 1;
-const L2CAP_CHANNELS_MAX: usize = 1;
-
-// This creates a default app-descriptor required by the esp-idf bootloader.
-// For more information see: <https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/system/app_image_format.html#application-description>
-esp_bootloader_esp_idf::esp_app_desc!();
-
-#[allow(
-    clippy::large_stack_frames,
-    reason = "it's not unusual to allocate larger buffers etc. in main"
-)]
-#[esp_rtos::main]
-async fn main(spawner: Spawner) -> ! {
-    // generator version: 1.4.0
-    // generator parameters: -o esp32 -o unstable-hal -o alloc -o embassy -o ble-trouble -o defmt -o neovim-rustaceanvim
-
-    let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
-    let peripherals = esp_hal::init(config);
-
-    esp_alloc::heap_allocator!(#[esp_hal::ram(reclaimed)] size: 98768);
+    esp_alloc::heap_allocator!(size: 72 * 1024);
 
     let timg0 = TimerGroup::new(peripherals.TIMG0);
     esp_rtos::start(timg0.timer0, peripherals.FROM_CPU_INTR0);
 
-    info!("Embassy initialized!");
+    let bluetooth = peripherals.BT;
+    let connector = BleConnector::new(bluetooth, Default::default()).unwrap();
+    let controller: ExternalController<_, 1> = ExternalController::new(connector);
 
-    // find more examples https://github.com/embassy-rs/trouble/tree/main/examples/esp32
-    let transport = BleConnector::new(peripherals.BT, Default::default()).unwrap();
-    let ble_controller = ExternalController::<_, 1>::new(transport);
+    ble_scanner_run(controller).await;
+}
+
+/// Max number of connections
+const CONNECTIONS_MAX: usize = 1;
+const L2CAP_CHANNELS_MAX: usize = 1;
+
+async fn ble_scanner_run<C>(controller: C)
+where
+    C: Controller + ControllerCmdSync<LeSetScanParams>,
+{
+    // Using a fixed "random" address can be useful for testing. In real scenarios, one would
+    // use e.g. the MAC 6 byte array as the address (how to get that varies by the platform).
+    let address: Address = Address::random([0xff, 0x8f, 0x1b, 0x05, 0xe4, 0xff]);
+
+    info!("Our address = {:?}", address);
+
     let mut resources: HostResources<_, DefaultPacketPool, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX> =
         HostResources::new();
-    let _stack = trouble_host::new(ble_controller, &mut resources).build();
+    let stack = trouble_host::new(controller, &mut resources)
+        .set_random_address(address)
+        .build();
+    let mut runner = stack.runner();
+    let central = stack.central();
 
-    // TODO: Spawn some tasks
-    let _ = spawner;
-
-    loop {
-        info!("Hello world!");
-        Timer::after(Duration::from_secs(1)).await;
-    }
-
-    // for inspiration have a look at the examples at https://github.com/esp-rs/esp-hal/tree/esp-hal-v1.2.2/examples
+    let printer = Printer {};
+    let mut scanner = Scanner::new(central);
+    let _ = join(runner.run_with_handler(&printer), async {
+        let mut config = ScanConfig::default();
+        config.active = true;
+        config.phys = PhySet::M1;
+        config.interval = Duration::from_secs(1);
+        config.window = Duration::from_secs(1);
+        let mut _session = scanner.scan(&config).await.unwrap();
+        // Scan forever
+        loop {
+            Timer::after(Duration::from_secs(1)).await;
+        }
+    })
+    .await;
 }
+
+struct Printer {}
+
+impl EventHandler for Printer {
+    fn on_adv_reports(&self, mut it: LeAdvReportsIter<'_>) {
+        while let Some(Ok(report)) = it.next() {
+            info!("discovered: {:?}", report.addr);
+        }
+    }
+}
+

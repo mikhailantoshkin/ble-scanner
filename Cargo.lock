@@ -84,10 +84,12 @@ dependencies = [
  "critical-section",
  "defmt 1.2.0",
  "embassy-executor",
+ "embassy-futures",
  "embassy-time",
  "embedded-io 0.7.1",
  "embedded-io-async 0.7.0",
  "esp-alloc",
+ "esp-backtrace",
  "esp-bootloader-esp-idf",
  "esp-hal",
  "esp-println",
@@ -774,6 +776,23 @@ dependencies = [
  "esp-sync",
  "linked_list_allocator",
  "rlsf",
+]
+
+[[package]]
+name = "esp-backtrace"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4fbfed00e884572d620a6958b13456fc2bb8ab75802b5adc8afc224f97cdebad"
+dependencies = [
+ "defmt 1.2.0",
+ "document-features",
+ "esp-config",
+ "esp-metadata-generated 0.5.3",
+ "esp-println",
+ "heapless 0.9.3",
+ "riscv",
+ "semihosting",
+ "xtensa-lx",
 ]
 
 [[package]]
@@ -1898,6 +1917,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "semihosting"
+version = "0.1.25"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f8e4abf97879f4e80db69a9fba7bd64998e9bdad25f58ef045a778e191172fd4"
+
+[[package]]
 name = "serde"
 version = "1.0.229"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2232,6 +2257,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bb9fe2be24000037431b036ba244cdb1d26f40e1719548553fb43c3fc62d496b"
 dependencies = [
  "bt-hci",
+ "defmt 1.2.0",
  "embassy-futures",
  "embassy-sync 0.8.0",
  "embassy-time",
