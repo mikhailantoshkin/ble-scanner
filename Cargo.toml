@@ -44,6 +44,10 @@ critical-section = "1.2.0"
 static_cell = "2.1.1"
 
 [patch.crates-io]
+# esp-wifi-sys based on a rom that is only present in the upstream
+# https://github.com/esp-rs/esp-wifi-sys/pull/508
+# https://github.com/esp-rs/esp-hal/pull/6271
+# pinning to a commit that has the correct linker scripts in esp-rom-sys
 esp-rom-sys = { git = "https://github.com/esp-rs/esp-hal.git", rev = "6fedea34e2244a40ea653c226258473aa3ff5e14" }
 
 
