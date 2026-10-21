@@ -2,9 +2,10 @@
 
 #![no_std]
 #![no_main]
+use core::{cell::RefCell, fmt::LowerHex};
 
 use bt_hci::{cmd::le::LeSetScanParams, controller::ControllerCmdSync};
-use defmt::info;
+use defmt::{Format, info};
 use embassy_executor::Spawner;
 use embassy_futures::join::join;
 use embassy_time::{Duration, Timer};
@@ -13,6 +14,7 @@ use esp_backtrace as _;
 use esp_hal::{clock::CpuClock, timer::timg::TimerGroup};
 use esp_println as _;
 use esp_radio::ble::controller::BleConnector;
+use heapless::Deque;
 use trouble_host::prelude::*;
 
 esp_bootloader_esp_idf::esp_app_desc!();
@@ -60,7 +62,9 @@ where
     let mut runner = stack.runner();
     let central = stack.central();
 
-    let printer = Printer {};
+    let printer = Printer {
+        seen: RefCell::new(Deque::new()),
+    };
     let mut scanner = Scanner::new(central);
     let _ = join(runner.run_with_handler(&printer), async {
         let mut config = ScanConfig::default();
@@ -77,12 +81,22 @@ where
     .await;
 }
 
-struct Printer {}
+struct Printer {
+    seen: RefCell<Deque<BdAddr, 128>>,
+}
 
 impl EventHandler for Printer {
     fn on_adv_reports(&self, mut it: LeAdvReportsIter<'_>) {
+        let mut seen = self.seen.borrow_mut();
         while let Some(Ok(report)) = it.next() {
-            info!("discovered: {:?}", report.addr);
+            if seen.iter().find(|b| b.raw() == report.addr.raw()).is_none() {
+                let BdAddr(addr) = report.addr;
+                info!("discovered: {=[u8; 6]:X}", addr);
+                if seen.is_full() {
+                    seen.pop_front();
+                }
+                seen.push_back(report.addr).unwrap();
+            }
         }
     }
 }

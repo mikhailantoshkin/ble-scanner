@@ -95,6 +95,7 @@ dependencies = [
  "esp-println",
  "esp-radio",
  "esp-rtos",
+ "heapless 0.9.3",
  "static_cell",
  "trouble-host",
 ]
